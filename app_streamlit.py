@@ -4,36 +4,35 @@ import re
 import streamlit as st
 from dotenv import load_dotenv
 import openai
-from auth import login_user, register_user, get_user_by_id
+from auth import login_user, register_user, get_user_by_id, update_openai_api_key, get_openai_api_key
 
 # Basic Logging Setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Load environment variables
+# Load environment variables (for fallback only)
 load_dotenv()
 
 # --- Configuration ---
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+DEFAULT_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# --- Config Checks ---
-openai_config_missing = False
-if not OPENAI_API_KEY:
-    logging.warning("OpenAI API key not set. AI features will fail.")
-    openai_config_missing = True
-else:
-    # Configure OpenAI client
-    openai.api_key = OPENAI_API_KEY
+def get_user_api_key():
+    """Get the API key for the current user or fall back to environment variable."""
+    if st.session_state.user:
+        user_key = get_openai_api_key(st.session_state.user['username'])
+        if user_key:
+            return user_key
+    return DEFAULT_OPENAI_API_KEY
 
 # --- AI Helper Function ---
 def get_ai_decomposition(task_description):
     """Calls the OpenAI API with updated prompt for natural output."""
-    if openai_config_missing: 
-        logging.error("OpenAI Config Missing")
+    api_key = get_user_api_key()
+    if not api_key:
+        logging.error("No OpenAI API Key available")
         return None
-    
-    if not OPENAI_API_KEY:
-        logging.error("OpenAI API Key Missing")
-        return None
+
+    # Configure OpenAI client with user's API key
+    openai.api_key = api_key
 
     system_prompt = """You are Em, a supportive, non-judgmental AI assistant for users with ADHD. Your goal is to help users start tasks they feel overwhelmed by. Be gentle, understanding, sincere, and focus on breaking things down into 3-5 small, concrete, actionable first steps. Avoid demanding or overly cheerful language."""
 
@@ -151,12 +150,44 @@ def show_main_app():
         st.title("ADHD Guardian AI")
         if st.session_state.user:
             st.write(f"Welcome, {st.session_state.user['username']}!")
+            
+            # API Key Management
+            with st.expander("Manage OpenAI API Key"):
+                current_key = get_openai_api_key(st.session_state.user['username'])
+                new_key = st.text_input(
+                    "OpenAI API Key",
+                    value=current_key if current_key else "",
+                    type="password",
+                    help="Enter your OpenAI API key. This will be stored securely in the database."
+                )
+                if st.button("Update API Key"):
+                    if new_key:
+                        success, message = update_openai_api_key(st.session_state.user['username'], new_key)
+                        if success:
+                            st.success(message)
+                        else:
+                            st.error(message)
+                    else:
+                        st.error("Please enter an API key")
+                
+                if not current_key:
+                    st.warning("No API key set. AI features will not work until you add one.")
+            
             if st.button("Logout"):
                 st.session_state.clear()
                 st.rerun()
     
     # Main content area
     st.title("ADHD Guardian AI")
+    
+    # Check for API key before showing main content
+    if not get_user_api_key():
+        st.warning("""
+        Please set your OpenAI API key in the sidebar to use AI features.
+        You can get an API key from [OpenAI's website](https://platform.openai.com/api-keys).
+        """)
+        return
+
     st.markdown("""
     ### Your AI Partner for Navigating Focus Flow
     

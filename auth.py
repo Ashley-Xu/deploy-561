@@ -18,6 +18,7 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            openai_api_key TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login TIMESTAMP
         )
@@ -107,6 +108,33 @@ def get_user_by_id(user_id):
         return None
     except Exception as e:
         logger.error(f"Error getting user: {e}")
+        return None
+
+def update_openai_api_key(username, api_key):
+    """Update user's OpenAI API key."""
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute('UPDATE users SET openai_api_key = ? WHERE username = ?',
+                 (api_key, username))
+        conn.commit()
+        conn.close()
+        return True, "API key updated successfully"
+    except Exception as e:
+        logger.error(f"Error updating API key: {e}")
+        return False, "Failed to update API key"
+
+def get_openai_api_key(username):
+    """Get user's OpenAI API key."""
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute('SELECT openai_api_key FROM users WHERE username = ?', (username,))
+        result = c.fetchone()
+        conn.close()
+        return result[0] if result else None
+    except Exception as e:
+        logger.error(f"Error getting API key: {e}")
         return None
 
 # Initialize database when module is imported
